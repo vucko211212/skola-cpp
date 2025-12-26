@@ -1,150 +1,143 @@
 import streamlit as st
 from openai import OpenAI
 
-# --- KONFIGURACIJA STRANICE ---
+# --- KONFIGURACIJA ---
 st.set_page_config(
     page_title="C++ Vežbaonica - Specijalno IT odeljenje",
     page_icon="💻",
     layout="wide"
 )
 
-# --- CSS STILOVI (Tamna tema i lepši chat) ---
+# --- CSS STILOVI ---
 st.markdown("""
 <style>
-    .stApp {
-        background-color: #0e1117;
-        color: #fafafa;
-    }
-    .stTextArea textarea {
-        font-family: 'Consolas', 'Courier New', monospace;
-        background-color: #1e1e1e;
-        color: #dcdcdc;
-        border: 1px solid #4a4a4a;
-    }
-    .chat-msg {
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 10px;
-        line-height: 1.5;
-    }
-    .user-msg {
-        background-color: #2b3137;
-        border-left: 4px solid #3b8ed0;
-    }
-    .bot-msg {
-        background-color: #1c2329;
-        border-left: 4px solid #28a745;
-    }
-    h1, h2, h3 {
-        color: #ffffff;
-    }
+    .stApp { background-color: #0e1117; color: #fafafa; }
+    .stTextArea textarea { font-family: 'Consolas', monospace; background-color: #1e1e1e; color: #dcdcdc; }
+    .chat-msg { padding: 15px; border-radius: 8px; margin-bottom: 10px; line-height: 1.6; }
+    .user-msg { background-color: #2b3137; border-left: 4px solid #3b8ed0; }
+    .bot-msg { background-color: #1c2329; border-left: 4px solid #28a745; }
+    /* Stil za tabove */
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+    .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: #1c2329; border-radius: 5px 5px 0 0; gap: 1px; padding-top: 10px; padding-bottom: 10px; }
+    .stTabs [aria-selected="true"] { background-color: #28a745; color: white; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- LOGIKA ZA API KLJUČ (SIGURNOST) ---
+# --- API KLJUČ ---
 api_key = None
-
-# 1. Provera da li je ključ u tajnim podešavanjima (za Web)
 if "OPENAI_API_KEY" in st.secrets:
     api_key = st.secrets["OPENAI_API_KEY"]
-# 2. Ako nije, traži ga ručno (za lokalno testiranje)
 else:
     with st.sidebar:
-        api_key = st.text_input("🔑 API Ključ (Nije podešen u Secrets):", type="password")
-        if not api_key:
-            st.warning("⚠️ Da bi aplikacija radila, potreban je API ključ.")
+        api_key = st.text_input("🔑 API Ključ:", type="password")
 
-# --- INICIJALIZACIJA CHATA I PROFESORA ---
+# --- INICIJALIZACIJA ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
     
-    # SISTEMSKI PROMPT - OVDE DEFINIŠEMO PONAŠANJE PROFESORA
+    # --- SISTEMSKI PROMPT (MOZAK PROFESORA) ---
     st.session_state.messages.append({
         "role": "system", 
         "content": """
-        Ti si iskusni profesor informatike u gimnaziji (specijalno IT odeljenje).
-        Predaješ predmet "Programiranje" (C++) učenicima prvog razreda.
+        Ti si iskusni i metodični profesor informatike u specijalizovanom IT odeljenju gimnazije. Predaješ C++.
         
-        TVOJ PEDAGOŠKI PRISTUP:
-        1. SOKRATOVSKI METOD: Nikada ne piši ceo tačan kod odmah. Umesto toga, postavljaj pitanja koja navode učenika da sam uoči grešku.
-        2. TEME PRVOG RAZREDA: Fokusiraj se isključivo na:
-           - Tipove podataka (int, float, char, bool)
-           - Ulaz/izlaz (cin, cout, iomanip)
-           - Grananja (if, else if, switch)
-           - Petlje (for, while, do-while)
-           - Jednodimenzionalne nizove
-           - Osnovne algoritme (minimum, maksimum, suma, pretraga).
-           - NE KORISTI: Vektore, klase, pokazivače (osim ako učenik eksplicitno ne pita za napredno).
-        3. DETEKCIJA GREŠAKA: Ako kod ima sintaksnu grešku, objasni je laički. Ako je logika pogrešna, daj primer inputa za koji kod pada.
-        4. TON: Budi strog ali pravičan i ohrabrujući. Govori na srpskom jeziku.
-        5. FORMATIRANJE: Koristi Markdown za kod.
+        KADA UČENIK PITA TEORIJSKO PITANJE (npr. "Kako da sortiram niz?", "Šta je for petlja?"):
+        1. NE DAJ SAMO KOD. Daj strukturirano objašnjenje.
+        2. STRUKTURA ODGOVORA:
+           - **Koncept (Logika):** Objasni rečima šta radimo (npr. "Zamisli da ređaš karte...").
+           - **Postupak:** Taksativno navedi korake algoritma.
+           - **Primer koda:** Kratak, jasan C++ primer (koristi Markdown).
+           - **Objašnjenje koda:** Šta radi koja linija.
+           - **Savet/Trik:** Neka česta greška ili "best practice".
+        
+        KADA UČENIK POŠALJE SVOJ KOD NA PREGLED:
+        1. Koristi Sokratovski metod. Ne ispravljaj odmah, nego postavi pitanje koje ukazuje na grešku.
+        2. Ako je kod dobar, pohvali ga i predloži malu optimizaciju.
+        
+        Opšta pravila:
+        - Budi strpljiv i ohrabrujući.
+        - Fokus na gradivo 1. razreda (nema pointera, klasa, vektora osim ako se ne traži).
+        - Koristi srpski jezik.
         """
     })
 
-# --- UI INTERFEJS ---
+st.title("💻 Virtuelni Profesor Programiranja")
 
-st.title("💻 Vežbaonica za Programiranje (C++)")
-st.caption("Virtuelni asistent za učenike specijalizovanih IT odeljenja")
+# --- UI STRUKTURA ---
+# Delimo ekran na levi deo (Interakcija) i desni deo (Chat)
+col_input, col_chat = st.columns([1.1, 1])
 
-col_editor, col_chat = st.columns([1.2, 1])
-
-with col_editor:
-    st.subheader("Tvoj kod")
-    # Default kod koji se pojavljuje
-    default_code = """#include <iostream>
+with col_input:
+    # --- TABOVI ---
+    tab_code, tab_ask = st.tabs(["📝 Piši Kod (Vežbanje)", "❓ Pitaj Profesora (Teorija)"])
+    
+    # --- TAB 1: EDITOR KODA ---
+    with tab_code:
+        st.caption("Ovde vežbaš zadatke. Napiši kod i profesor će ga pregledati.")
+        default_code = """#include <iostream>
 using namespace std;
 
 int main() {
-    // Ovde napiši svoj kod
-    
+    // Tvoj kod ovde
     return 0;
 }"""
-    student_code = st.text_area("C++ Editor", height=450, value=default_code, key="editor")
-    
-    st.subheader("Pitanje za profesora")
-    student_question = st.text_input("Šta želiš da pitaš?", placeholder="Npr: Zašto mi ne radi petlja?")
-    
-    btn_check = st.button("🚀 Pošalji na pregled", type="primary")
+        student_code = st.text_area("Editor", height=400, value=default_code)
+        code_question = st.text_input("Imaš li konkretno pitanje u vezi ovog koda?", placeholder="Npr: Gde sam pogrešio?")
+        btn_analyze = st.button("🔍 Pregledaj moj kod")
 
-with col_chat:
-    st.subheader("Razgovor sa profesorom")
-    chat_container = st.container(height=550)
-
-    # Prikaz istorije
-    with chat_container:
-        if len(st.session_state.messages) == 1:
-            st.info("Zdravo! Ja sam tvoj virtuelni profesor. Zalepi svoj zadatak ili napiši kod, pa da vidimo kako ti ide.")
-        
-        for msg in st.session_state.messages:
-            if msg["role"] == "user":
-                st.markdown(f'<div class="chat-msg user-msg"><b>Učenik:</b><br>{msg["content"]}</div>', unsafe_allow_html=True)
-            elif msg["role"] == "assistant":
-                st.markdown(f'<div class="chat-msg bot-msg"><b>Profesor:</b><br>{msg["content"]}</div>', unsafe_allow_html=True)
+    # --- TAB 2: TEORIJSKA PITANJA ---
+    with tab_ask:
+        st.caption("Ovde možeš pitati bilo šta što ti nije jasno, bez pisanja koda.")
+        theory_question = st.text_area("Tvoje pitanje:", height=150, placeholder="Npr: Kako da napravim program koji sortira brojeve? Nije mi jasna while petlja...")
+        st.info("💡 Savet: Pitaj za primere, objašnjenja postupaka ili kako funkcionišu određene naredbe.")
+        btn_ask = st.button("🙋 Postavi pitanje")
 
 # --- LOGIKA SLANJA ---
-if btn_check:
-    if not api_key:
-        st.error("Nedostaje API ključ! Zamoli administratora da podesi 'Secrets'.")
-    else:
-        # Formiramo prompt koji šaljemo AI-u
-        full_prompt = f"Ovo je moj C++ kod:\n```cpp\n{student_code}\n```\n\nMoje pitanje/komentar: {student_question}"
-        
-        # Dodajemo u istoriju (prikazujemo u chatu)
-        st.session_state.messages.append({"role": "user", "content": full_prompt})
+prompt_to_send = None
+
+# Ako je kliknuto dugme u prvom tabu
+if btn_analyze and api_key:
+    prompt_to_send = f"Analiziraj moj kod:\n```cpp\n{student_code}\n```\nPitanje uz kod: {code_question}"
+
+# Ako je kliknuto dugme u drugom tabu
+if btn_ask and api_key and theory_question:
+    prompt_to_send = theory_question
+
+# --- OBRADA I PRIKAZ CHATA ---
+with col_chat:
+    st.subheader("Razgovor")
+    chat_container = st.container(height=600)
+    
+    # Slanje zahteva AI-u
+    if prompt_to_send:
+        # Dodajemo korisnikovu poruku
+        st.session_state.messages.append({"role": "user", "content": prompt_to_send})
         
         client = OpenAI(api_key=api_key)
         
-        with st.spinner("Profesor pregleda tvoj rad..."):
-            try:
+        try:
+            with st.spinner("Profesor kuca odgovor..."):
                 response = client.chat.completions.create(
-                    model="gpt-4o", # Preporuka za najbolju logiku
+                    model="gpt-4o",
                     messages=st.session_state.messages,
-                    temperature=0.5 # Malo manja kreativnost za preciznije objašnjenje
+                    temperature=0.5
                 )
-                
                 bot_reply = response.choices[0].message.content
                 st.session_state.messages.append({"role": "assistant", "content": bot_reply})
-                st.rerun() # Osvežavamo stranicu da se vidi odgovor
-                
-            except Exception as e:
-                st.error(f"Greška u komunikaciji: {e}")
+        except Exception as e:
+            st.error(f"Došlo je do greške: {e}")
+
+    # Prikaz istorije poruka
+    with chat_container:
+        if len(st.session_state.messages) == 1:
+            st.markdown('<div class="chat-msg bot-msg"><b>Profesor:</b><br>Zdravo! Izaberi tab levo: "Piši Kod" ako vežbaš zadatke, ili "Pitaj Profesora" ako ti treba objašnjenje lekcije.</div>', unsafe_allow_html=True)
+        
+        for msg in st.session_state.messages:
+            if msg["role"] == "user":
+                # Skraćujemo prikaz ako je korisnik poslao ogroman kod, da ne guši chat
+                display_text = msg["content"]
+                if "Analiziraj moj kod" in display_text:
+                    display_text = "📝 <i>Poslao sam kod na pregled...</i>"
+                st.markdown(f'<div class="chat-msg user-msg"><b>Učenik:</b><br>{display_text}</div>', unsafe_allow_html=True)
+            elif msg["role"] == "assistant":
+                st.markdown(f'<div class="chat-msg bot-msg"><b>Profesor:</b><br>{msg["content"]}</div>', unsafe_allow_html=True)
