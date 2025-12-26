@@ -226,3 +226,43 @@ with col_workspace:
                         full_response = resp.choices[0].message.content
                         
                         # --- PAMETNIJE HVATANJE KODA ---
+                        # Prvo probamo školski: ```dot ... ```
+                        match = re.search(r'```dot(.*?)```', full_response, re.DOTALL)
+                        if not match:
+                             # Ako AI zaboravi "dot", probamo samo ``` ... ```
+                            match = re.search(r'```(.*?)```', full_response, re.DOTALL)
+
+                        if match:
+                            dot_code = match.group(1).strip()
+                            # Pokušaj crtanja sa hvatanjem grešaka u sintaksi
+                            try:
+                                st.graphviz_chart(dot_code)
+                            except Exception as e:
+                                st.error(f"AI je generisao neispravnu sintaksu za dijagram. Pokušaj sa jednostavnijim kodom.\n(Greška servera: {e})")
+                        else:
+                            st.error("Nisam uspeo da izvučem dijagram iz odgovora AI-a. Pokušaj ponovo.")
+                            # Za debagovanje, otkomentariši sledeću liniju da vidiš šta je AI vratio:
+                            # st.write(full_response) 
+
+                    except Exception as e:
+                        st.error(f"Došlo je do greške u komunikaciji: {e}")
+
+# DESNA KOLONA: CHAT
+with col_chat:
+    st.markdown("### 💬 Mentor")
+    chat_box = st.container(height=550)
+    with chat_box:
+        for msg in st.session_state.messages:
+            role_class = "bot-msg" if msg["role"]=="assistant" else "user-msg"
+            st.markdown(f'<div class="chat-msg {role_class}">{msg["content"]}</div>', unsafe_allow_html=True)
+            
+    st.markdown("---")
+    c_in = st.text_area("Chat:", height=80, label_visibility="collapsed", placeholder="Pitaj profesora...")
+    if st.button("Pošalji"):
+        if api_key and c_in:
+            st.session_state.messages.append({"role":"user", "content":c_in})
+            client = Groq(api_key=api_key)
+            with st.spinner("..."):
+                resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt}] + st.session_state.messages)
+                st.session_state.messages.append({"role":"assistant", "content":resp.choices[0].message.content})
+            st.rerun()
