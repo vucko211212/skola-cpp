@@ -16,16 +16,14 @@ st.markdown("""
     .user-msg { background-color: #2b3137; border-left: 4px solid #3b8ed0; text-align: right; }
     .bot-msg { background-color: #1c2329; border-left: 4px solid #f25a29; }
     
-    /* Zadaci i Rešenja */
+    /* Elementi */
     .task-box { background-color: #262730; padding: 20px; border-radius: 10px; border: 1px solid #4a4a4a; margin-bottom: 20px; }
     .solution-box { background-color: #1e2620; padding: 15px; border-radius: 10px; border: 1px solid #28a745; margin-top: 15px; }
-    
-    /* Dugmići */
-    .stButton button { width: 100%; border-radius: 5px; }
+    .trace-box { background-color: #1c2329; border: 1px solid #f25a29; padding: 10px; border-radius: 5px; }
     
     /* Tabovi */
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .stTabs [data-baseweb="tab"] { background-color: #1c2329; border-radius: 5px 5px 0 0; padding: 10px 15px; }
+    .stTabs [data-baseweb="tab-list"] { gap: 4px; }
+    .stTabs [data-baseweb="tab"] { background-color: #1c2329; border-radius: 5px 5px 0 0; padding: 8px 12px; font-size: 0.85em; }
     .stTabs [aria-selected="true"] { background-color: #f25a29; color: white; border-top: 2px solid white;}
 </style>
 """, unsafe_allow_html=True)
@@ -63,76 +61,65 @@ with st.sidebar:
 welcome_msg = (
     f"Zdravo! Ja sam tvoj mentor za programiranje.\n\n"
     f"Vidim da si u **{razred}u** i da radite **{tema}**.\n\n"
-    "**Pre nego što krenemo na zadatke:**\n"
+    "**Pre nego što krenemo:**\n"
     "1. Šta ste radili na poslednjem času?\n"
     "2. Da li ti je nešto ostalo nejasno?\n\n"
     "Odgovori mi dole u polju za unos 👇"
 )
 
-if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": welcome_msg}]
+# Inicijalizacija svih promenljivih
+if "messages" not in st.session_state: st.session_state.messages = [{"role": "assistant", "content": welcome_msg}]
 if "current_task" not in st.session_state: st.session_state.current_task = ""
 if "current_solution" not in st.session_state: st.session_state.current_solution = ""
 if "buggy_code" not in st.session_state: st.session_state.buggy_code = ""
+if "quiz_code" not in st.session_state: st.session_state.quiz_code = "" # Za Kviz
 
-# --- SISTEMSKI PROMPT (AŽURIRAN: ZABRANA PYTHON-A) ---
+# --- SISTEMSKI PROMPT ---
 system_prompt = f"""
 Ti si iskusni profesor informatike u gimnaziji "Bora Stanković" (Niš), specijalno IT odeljenje.
 Radiš sa učenikom {razred}-og razreda. Tema: {tema}.
 
-STROGA PRAVILA ZA KODIRANJE:
-1. **ISKLJUČIVO C++**. ZABRANJENO JE KORISTITI PYTHON.
-2. Ako učenik pošalje Python kod, upozori ga da u ovoj školi radimo samo C++ i prevedi kod u C++.
-3. Koristi `cin`, `cout` i standardne biblioteke (`<iostream>`, `<vector>` itd.).
-
-TVOJA PEDAGOGIJA:
-1. Prvo dijagnostika kroz razgovor.
-2. Kada daješ rešenje zadatka: MORAŠ prvo objasniti logiku (algoritam), pa tek onda kod.
-3. Budi ohrabrujući ali traži preciznost.
-4. Jezik komunikacije: Standardni srpski (ekavica).
-
-Zapamti: Ti si profesor C++ jezika. Python ne postoji u tvojoj učionici.
+STROGA PRAVILA:
+1. **ISKLJUČIVO C++**. ZABRANJEN PYTHON.
+2. PEDAGOGIJA:
+   - **Trace Table:** Kada se traži simulacija, napravi Markdown tabelu sa kolonama: Korak, Linija Koda, Stanje Promenljivih, Izlaz.
+   - **Kviz:** Daj kod sa "zvrčkom" (npr. integer division 5/2=2, post-increment a++). Ne otkrivaj rešenje dok učenik ne pokuša.
+3. Objašnjenja moraju biti logična, algoritamska i na srpskom jeziku (ekavica).
 """
 
 st.title(f"🎓 Profesor C++ ({razred})")
 
 # --- GLAVNI DEO ---
-col_workspace, col_chat = st.columns([1.4, 1])
+col_workspace, col_chat = st.columns([1.5, 1])
 
 # ==========================================
 # LEVA KOLONA: RADNI PROSTOR (ALATI)
 # ==========================================
 with col_workspace:
-    tab_vezba, tab_viz, tab_lov = st.tabs(["📝 Zadaci", "📊 Dijagrami", "🐛 Lov na greške"])
+    # 5 TABOVA: Zadaci, Simulacija, Kviz, Vizuelizacija, Lov na greške
+    tab_vezba, tab_sim, tab_kviz, tab_viz, tab_lov = st.tabs(["📝 Zadaci", "🔍 Simulacija", "❓ Kviz", "📊 Dijagrami", "🐛 Lov na greške"])
     
-    # === TAB 1: ZADACI ===
+    # === TAB 1: ZADACI (Sa rešenjima) ===
     with tab_vezba:
         st.markdown("#### Generator Zadataka")
-        
         col_btn1, col_btn2 = st.columns([1, 1])
-        
         with col_btn1:
             if st.button("🎲 Daj mi zadatak", type="primary"):
                 if api_key:
                     st.session_state.current_solution = "" 
                     client = Groq(api_key=api_key)
-                    # Eksplicitno naglašavamo C++ i u promptu za zadatak
-                    context_p = "Na osnovu onoga što smo pričali, "
-                    p = f"{context_p} zadaj mi jedan {tezina} zadatak iz oblasti {tema} u jeziku C++. Samo Tekst, Ulaz, Izlaz."
+                    p = f"Na osnovu chata, zadaj mi jedan {tezina} C++ zadatak ({tema}). Samo Tekst, Ulaz, Izlaz."
                     with st.spinner("Smišljam C++ zadatak..."):
                         full_msgs = [{"role": "system", "content": system_prompt}] + st.session_state.messages + [{"role":"user", "content": p}]
                         resp = client.chat.completions.create(model=MODEL_NAZIV, messages=full_msgs)
                         st.session_state.current_task = resp.choices[0].message.content
                     st.rerun()
-
         with col_btn2:
             if st.button("👀 Reši mi zadatak"):
-                if not st.session_state.current_task:
-                    st.warning("Prvo generiši zadatak!")
+                if not st.session_state.current_task: st.warning("Prvo generiši zadatak!")
                 elif api_key:
                     client = Groq(api_key=api_key)
-                    # Eksplicitno tražimo C++ rešenje
-                    sol_prompt = f"Zadatak: {st.session_state.current_task}\n\nUčenik se zaglavio. Daj DETALJNO objašnjenje i rešenje ISKLJUČIVO u C++ jeziku. Objasni korak po korak."
+                    sol_prompt = f"Zadatak: {st.session_state.current_task}\n\nDaj DETALJNO objašnjenje i C++ rešenje. Objasni korak po korak."
                     with st.spinner("Pišem C++ rešenje..."):
                         full_msgs = [{"role": "system", "content": system_prompt}] + st.session_state.messages + [{"role":"user", "content": sol_prompt}]
                         resp = client.chat.completions.create(model=MODEL_NAZIV, messages=full_msgs)
@@ -141,26 +128,59 @@ with col_workspace:
 
         if st.session_state.current_task:
             st.markdown(f'<div class="task-box">{st.session_state.current_task}</div>', unsafe_allow_html=True)
-        
         if st.session_state.current_solution:
-            st.markdown(f'<div class="solution-box"><b>💡 Rešenje profesora (C++):</b><br>{st.session_state.current_solution}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="solution-box"><b>💡 Rešenje profesora:</b><br>{st.session_state.current_solution}</div>', unsafe_allow_html=True)
 
         st.markdown("---")
-        st.caption("Tvoj C++ Editor:")
-        student_code = st.text_area("Kod", height=300, value="#include <iostream>\nusing namespace std;\n\nint main() {\n    return 0;\n}", label_visibility="collapsed")
-        
-        if st.button("🚀 Predaj moje rešenje"):
+        student_code = st.text_area("Tvoj C++ kod:", height=200, value="#include <iostream>\nusing namespace std;\n\nint main() {\n    return 0;\n}", label_visibility="collapsed")
+        if st.button("🚀 Predaj rešenje"):
             if api_key:
-                msg = f"Zadatak: {st.session_state.current_task}\nKod:\n```cpp\n{student_code}\n```\nPregledaj moj C++ kod."
+                msg = f"Zadatak: {st.session_state.current_task}\nKod:\n```cpp\n{student_code}\n```\nPregledaj moj kod."
                 st.session_state.messages.append({"role": "user", "content": msg})
                 client = Groq(api_key=api_key)
-                with st.spinner("Analiziram C++..."):
+                with st.spinner("Analiziram..."):
                     full_msgs = [{"role": "system", "content": system_prompt}] + st.session_state.messages
                     resp = client.chat.completions.create(model=MODEL_NAZIV, messages=full_msgs)
                     st.session_state.messages.append({"role": "assistant", "content": resp.choices[0].message.content})
                 st.rerun()
 
-    # === TAB 2: VIZUELIZACIJA ===
+    # === TAB 2: SIMULACIJA (TRACE TABLE) - NOVO! ===
+    with tab_sim:
+        st.info("Ubaci kod (npr. petlju) i ja ću napraviti **Tabelu praćenja (Trace Table)** da vidiš promenu vrednosti korak-po-korak.")
+        sim_code = st.text_area("Kod za simulaciju:", height=150, placeholder="for(int i=0; i<3; i++)...")
+        
+        if st.button("📉 Simuliraj izvršavanje"):
+            if api_key and sim_code:
+                client = Groq(api_key=api_key)
+                # Prompt specifičan za tabelu
+                sim_prompt = f"Napravi detaljnu Trace Table (tabelu praćenja) za ovaj C++ kod. Pokaži svaku iteraciju. Kod:\n{sim_code}"
+                with st.spinner("Izvršavam 'Dry Run' simulaciju..."):
+                    resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt},{"role":"user","content":sim_prompt}])
+                    st.markdown(resp.choices[0].message.content)
+
+    # === TAB 3: KVIZ (PREDVIDI ISPIS) - NOVO! ===
+    with tab_kviz:
+        st.markdown("#### 🤔 Šta će ispisati ovaj kod?")
+        if st.button("🎲 Generiši trik pitanje"):
+            if api_key:
+                client = Groq(api_key=api_key)
+                quiz_prompt = f"Daj mi kratak C++ snippet (5-10 linija) iz oblasti {tema} koji ima neku 'zvrčku' (npr. integer deljenje, do-while, post-increment). PITAJ SAMO 'Šta je ispis?'. NE DAJ REŠENJE ODMAH."
+                resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt},{"role":"user","content":quiz_prompt}])
+                st.session_state.quiz_code = resp.choices[0].message.content
+        
+        if st.session_state.quiz_code:
+            st.code(st.session_state.quiz_code, language="cpp")
+            user_guess = st.text_input("Tvoj odgovor (šta će biti na ekranu?):")
+            
+            if st.button("Proveri moj odgovor"):
+                if api_key and user_guess:
+                    client = Groq(api_key=api_key)
+                    chk_prompt = f"Kod:\n{st.session_state.quiz_code}\n\nUčenik kaže da je ispis: '{user_guess}'. Da li je to tačno? Objasni zašto."
+                    with st.spinner("Proveravam..."):
+                        resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt},{"role":"user","content":chk_prompt}])
+                        st.markdown(resp.choices[0].message.content)
+
+    # === TAB 4: VIZUELIZACIJA (DIJAGRAMI) ===
     with tab_viz:
         st.info("Zalepi C++ kod da vidiš dijagram toka.")
         viz_code = st.text_area("Kod za dijagram:", height=150)
@@ -173,7 +193,7 @@ with col_workspace:
                 if match: st.graphviz_chart(match.group(1).strip())
                 else: st.error("Greška pri crtanju.")
 
-    # === TAB 3: LOV NA GREŠKE ===
+    # === TAB 5: LOV NA GREŠKE ===
     with tab_lov:
         if st.button("🐛 Generiši kod sa greškom"):
             if api_key:
@@ -185,7 +205,7 @@ with col_workspace:
         if st.session_state.buggy_code:
             st.code(st.session_state.buggy_code, language="cpp")
             guess = st.text_input("Gde je greška?")
-            if st.button("Proveri"):
+            if st.button("Proveri grešku"):
                 st.session_state.messages.append({"role": "user", "content": f"U kodu:\n{st.session_state.buggy_code}\nMislim da je greška: {guess}"})
                 client = Groq(api_key=api_key)
                 resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt}] + st.session_state.messages)
@@ -210,7 +230,7 @@ with col_chat:
                 st.markdown(f'<div class="chat-msg user-msg">{text}</div>', unsafe_allow_html=True)
 
     st.markdown("---")
-    chat_input = st.text_area("Piši profesoru ovde:", height=80, placeholder="Npr: Nije mi jasan prethodni korak...", label_visibility="collapsed")
+    chat_input = st.text_area("Piši profesoru ovde:", height=80, placeholder="Npr: Ne razumem tabelu simulacije...", label_visibility="collapsed")
     
     if st.button("Pošalji poruku"):
         if api_key and chat_input:
