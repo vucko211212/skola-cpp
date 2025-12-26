@@ -2,11 +2,7 @@ import streamlit as st
 from groq import Groq
 
 # --- KONFIGURACIJA ---
-st.set_page_config(
-    page_title="C++ Vežbaonica - Specijalno IT odeljenje",
-    page_icon="💻",
-    layout="wide"
-)
+st.set_page_config(page_title="Spec. IT Vežbaonica - Bora Stanković", page_icon="🎓", layout="wide")
 
 # --- CSS STILOVI ---
 st.markdown("""
@@ -15,118 +11,112 @@ st.markdown("""
     .stTextArea textarea { font-family: 'Consolas', monospace; background-color: #1e1e1e; color: #dcdcdc; }
     .chat-msg { padding: 15px; border-radius: 8px; margin-bottom: 10px; line-height: 1.6; }
     .user-msg { background-color: #2b3137; border-left: 4px solid #3b8ed0; }
-    .bot-msg { background-color: #1c2329; border-left: 4px solid #f25a29; } /* Groq narandžasta boja */
-    /* Stil za tabove */
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: #1c2329; border-radius: 5px 5px 0 0; gap: 1px; padding-top: 10px; padding-bottom: 10px; }
-    .stTabs [aria-selected="true"] { background-color: #f25a29; color: white; }
+    .bot-msg { background-color: #1c2329; border-left: 4px solid #f25a29; }
+    .task-box { background-color: #262730; padding: 20px; border-radius: 10px; border: 1px solid #f25a29; margin-bottom: 20px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- API KLJUČ (GROQ) ---
+# --- API KLJUČ ---
 api_key = None
-# Tražimo GROQ_API_KEY u tajnama
 if "GROQ_API_KEY" in st.secrets:
     api_key = st.secrets["GROQ_API_KEY"]
 else:
     with st.sidebar:
         api_key = st.text_input("🔑 Groq API Ključ:", type="password")
 
+# --- SIDEBAR: PODEŠAVANJA ČASA ---
+with st.sidebar:
+    st.header("🏫 Podešavanje časa")
+    razred = st.radio("Izaberi razred:", ["I Razred", "II Razred"])
+    
+    if razred == "I Razred":
+        tema = st.selectbox("Oblast vežbanja:", 
+            ["Osnove (Tipovi, Ulaz/Izlaz)", "Grananja (if/switch)", "Petlje (for/while)", "Nizovi (1D)", "Brojni sistemi"])
+    else:
+        tema = st.selectbox("Oblast vežbanja:", 
+            ["Matrice (2D Nizovi)", "Stringovi", "Sortiranje i Pretraga", "Funkcije", "Rekurzija", "Strukture"])
+    
+    tezina = st.select_slider("Težina zadatka:", options=["Lak (Za dvojku)", "Srednji (Standardan)", "Takmičarski (Spec. IT)"])
+
 # --- INICIJALIZACIJA ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "current_task" not in st.session_state:
+    st.session_state.current_task = ""
+
+# --- SISTEMSKI PROMPT (PEDAGOGIJA ZA SPEC. ODELJENJA) ---
+system_prompt = f"""
+Ti si strogi ali pravičan profesor u gimnaziji "Bora Stanković" (Niš), smer za učenike sa posebnim sposobnostima za informatiku.
+Trenutno radiš sa učenikom {razred}-og razreda. Tema je: {tema}. Težina: {tezina}.
+
+TVOJA METODOLOGIJA (SPEC. IT STANDARD):
+1. **Insistiraj na optimizaciji:** Ako je zadatak "Takmičarski", nije dovoljno da kod radi. Mora biti efikasan (npr. izbegavati nepotrebne petlje).
+2. **Rubni slučajevi (Edge cases):** Uvek pitaj "Šta ako je unet negativan broj?", "Šta ako je niz prazan?". Na to se u ovom smeru gube poeni.
+3. **Stil:** Traži da kod bude čitak, promenljive smisleno imenovane.
+4. **Gradivo II razreda:** Ako je tema Matrice, insistiraj na pravilnom indeksiranju. Ako je Sortiranje, pitaj za Bubble vs Selection sort.
+5. **Jezik:** Srpski. Kod piši u C++.
+
+KADA GENERIŠEŠ ZADATAK:
+Daj jasan tekst zadatka, primer ulaza i primer izlaza (kao na Petlji ili BubbleBee).
+"""
+
+# Ako je lista prazna ili se promenio razred/tema, ažuriraj system prompt
+if not st.session_state.messages or st.session_state.messages[0]["content"] != system_prompt:
+    st.session_state.messages = [{"role": "system", "content": system_prompt}]
+
+st.title(f"🎓 Profesor C++ ({razred})")
+st.caption(f"Fokus: {tema} | Nivo: {tezina}")
+
+# --- GLAVNI INTERFEJS ---
+col_left, col_right = st.columns([1, 1])
+
+with col_left:
+    # SEKCIJA ZA GENERISANJE ZADATKA
+    st.markdown("### 1. Zadatak")
+    if st.button("🎲 Zadaj mi novi zadatak"):
+        if api_key:
+            client = Groq(api_key=api_key)
+            prompt_task = f"Daj mi jedan {tezina} zadatak iz oblasti {tema} za {razred}. Navedi Tekst zadatka, Primer Ulaza i Primer Izlaza. Ne piši rešenje."
+            
+            with st.spinner("Profesor smišlja zadatak..."):
+                resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt_task}])
+                st.session_state.current_task = resp.choices[0].message.content
     
-    # --- SISTEMSKI PROMPT ---
-    st.session_state.messages.append({
-        "role": "system", 
-        "content": """
-        Ti si iskusni i metodični profesor informatike u specijalizovanom IT odeljenju gimnazije. Predaješ C++.
-        
-        KADA UČENIK PITA TEORIJSKO PITANJE:
-        1. NE DAJ SAMO KOD. Daj strukturirano objašnjenje.
-        2. STRUKTURA: Koncept (Logika) -> Postupak -> Primer koda -> Objašnjenje.
-        
-        KADA UČENIK POŠALJE KOD:
-        1. Koristi Sokratovski metod. Postavi pitanje koje ukazuje na grešku.
-        2. Analiziraj logiku i sintaksu.
-        
-        Opšta pravila:
-        - Budi strpljiv.
-        - Fokus na gradivo 1. razreda (tipovi, if/else, petlje, nizovi).
-        - Koristi srpski jezik.
-        """
-    })
+    if st.session_state.current_task:
+        st.markdown(f'<div class="task-box">{st.session_state.current_task}</div>', unsafe_allow_html=True)
+    else:
+        st.info("Klikni na dugme iznad da dobiješ zadatak za vežbanje.")
 
-st.title("💻 Virtuelni Profesor (Powered by Llama 3)")
-
-# --- UI STRUKTURA ---
-col_input, col_chat = st.columns([1.1, 1])
-
-with col_input:
-    tab_code, tab_ask = st.tabs(["📝 Piši Kod (Vežbanje)", "❓ Pitaj Profesora (Teorija)"])
+    # SEKCIJA ZA KODIRANJE
+    st.markdown("### 2. Tvoje rešenje")
+    student_code = st.text_area("C++ Editor", height=300, value="#include <iostream>\nusing namespace std;\n\nint main() {\n    \n    return 0;\n}")
     
-    # --- TAB 1: EDITOR ---
-    with tab_code:
-        st.caption("Ovde vežbaš zadatke. Napiši kod i profesor će ga pregledati.")
-        default_code = """#include <iostream>
-using namespace std;
+    student_question = st.text_input("Pitanje ili komentar (opciono):")
+    btn_check = st.button("🚀 Predaj rešenje profesoru")
 
-int main() {
-    // Tvoj kod ovde
-    return 0;
-}"""
-        student_code = st.text_area("Editor", height=400, value=default_code)
-        code_question = st.text_input("Imaš li konkretno pitanje u vezi ovog koda?", placeholder="Npr: Gde sam pogrešio?")
-        btn_analyze = st.button("🔍 Pregledaj moj kod")
-
-    # --- TAB 2: TEORIJA ---
-    with tab_ask:
-        st.caption("Pitaj bilo šta bez pisanja koda.")
-        theory_question = st.text_area("Tvoje pitanje:", height=150, placeholder="Npr: Kako radi for petlja?")
-        btn_ask = st.button("🙋 Postavi pitanje")
-
-# --- LOGIKA SLANJA ---
-prompt_to_send = None
-
-if btn_analyze and api_key:
-    prompt_to_send = f"Analiziraj moj kod:\n```cpp\n{student_code}\n```\nPitanje uz kod: {code_question}"
-
-if btn_ask and api_key and theory_question:
-    prompt_to_send = theory_question
-
-# --- KOMUNIKACIJA SA GROQ ---
-with col_chat:
-    st.subheader("Razgovor")
+# --- LOGIKA ODGOVORA ---
+with col_right:
+    st.markdown("### 3. Analiza Profesora")
     chat_container = st.container(height=600)
-    
-    if prompt_to_send:
-        st.session_state.messages.append({"role": "user", "content": prompt_to_send})
+
+    if btn_check and api_key:
+        msg_content = f"Ovo je tekst zadatka koji radim:\n{st.session_state.current_task}\n\nOvo je moj kod:\n```cpp\n{student_code}\n```\n\n{student_question}"
+        st.session_state.messages.append({"role": "user", "content": msg_content})
         
-        # Inicijalizacija Groq klijenta
         client = Groq(api_key=api_key)
-        
-        try:
-            with st.spinner("Profesor razmišlja..."):
-                response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile", # Najnoviji i najpametniji besplatan model
-                    messages=st.session_state.messages,
-                    temperature=0.5
-                )
-                bot_reply = response.choices[0].message.content
+        with st.spinner("Profesor testira tvoj kod na rubnim slučajevima..."):
+            try:
+                resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=st.session_state.messages, temperature=0.4)
+                bot_reply = resp.choices[0].message.content
                 st.session_state.messages.append({"role": "assistant", "content": bot_reply})
-        except Exception as e:
-            st.error(f"Greška: {e}")
+            except Exception as e:
+                st.error(str(e))
 
     # Prikaz istorije
     with chat_container:
-        if len(st.session_state.messages) == 1:
-            st.info("Zdravo! Ja sam tvoj AI profesor. Koristim brzi Llama 3 model.")
-        
         for msg in st.session_state.messages:
-            if msg["role"] == "user":
-                display_text = msg["content"]
-                if "Analiziraj moj kod" in display_text:
-                    display_text = "📝 *Poslao sam kod na pregled...*"
-                st.markdown(f'<div class="chat-msg user-msg"><b>Učenik:</b><br>{display_text}</div>', unsafe_allow_html=True)
-            elif msg["role"] == "assistant":
-                st.markdown(f'<div class="chat-msg bot-msg"><b>Profesor:</b><br>{msg["content"]}</div>', unsafe_allow_html=True)
+            if msg["role"] == "assistant":
+                 st.markdown(f'<div class="chat-msg bot-msg"><b>Profesor:</b><br>{msg["content"]}</div>', unsafe_allow_html=True)
+            elif msg["role"] == "user" and "Ovo je tekst zadatka" not in msg["content"]: 
+                # Prikazujemo user poruke samo ako nisu one ogromne sa kodom (radi preglednosti)
+                st.markdown(f'<div class="chat-msg user-msg"><b>Učenik:</b><br>{msg["content"]}</div>', unsafe_allow_html=True)
