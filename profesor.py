@@ -33,7 +33,7 @@ else:
         api_key = st.text_input("🔑 Groq API Ključ:", type="password")
 
 if api_key:
-    api_key = api_key.strip() # Čišćenje razmaka
+    api_key = api_key.strip()
 
 MODEL_NAZIV = "llama-3.3-70b-versatile" 
 
@@ -42,7 +42,6 @@ with st.sidebar:
     st.header("🏫 Dnevnik rada")
     razred = st.radio("Razred:", ["I Razred", "II Razred"])
     
-    # Detaljnija lista tema za 1. polugodište
     if razred == "I Razred":
         tema_options = [
             "1. Uvod u C++ (Struktura, iostream)",
@@ -50,7 +49,7 @@ with st.sidebar:
             "3. Operatori (Aritmetički, Relacijski, Logički)",
             "4. Grananja (IF-ELSE)",
             "5. Switch Naredba",
-            "6. Petlje (FOR, WHILE, DO-WHILE) - *Napredno*",
+            "6. Petlje (FOR, WHILE, DO-WHILE) - Napredno",
             "7. Brojni sistemi (Bin, Oct, Hex, 2K)"
         ]
     else:
@@ -69,8 +68,8 @@ with st.sidebar:
 if "messages" not in st.session_state: st.session_state.messages = [{"role": "assistant", "content": "Zdravo! Spreman sam za rad."}]
 if "current_task" not in st.session_state: st.session_state.current_task = ""
 if "current_solution" not in st.session_state: st.session_state.current_solution = ""
-if "lesson_content" not in st.session_state: st.session_state.lesson_content = "" # Za lekciju
-if "exam_content" not in st.session_state: st.session_state.exam_content = "" # Za kontrolni
+if "lesson_content" not in st.session_state: st.session_state.lesson_content = ""
+if "exam_content" not in st.session_state: st.session_state.exam_content = ""
 
 # --- SYSTEM PROMPT ---
 system_prompt = f"""
@@ -79,14 +78,13 @@ Radiš sa učenikom {razred}-og razreda.
 Tema: {tema}.
 
 ULOGE:
-1. U tabu "Baza Znanja": Ti si AUTOR UDŽBENIKA. Pišeš detaljne, strukturirane lekcije sa primerima koda.
-2. U tabu "Zadaci": Ti si ISPITIVAČ. Zadaješ zadatke tipa Petlja.org.
-3. U tabu "Kontrolni": Generišeš simulaciju pismenog zadatka (3 zadatka: lak, srednji, težak).
+1. U tabu "Baza Znanja": Ti si AUTOR UDŽBENIKA. Pišeš detaljne lekcije.
+2. U tabu "Zadaci": Ti si ISPITIVAČ. Zadaješ zadatke.
+3. U tabu "Dijagrami": Ti si SYSTEM ZA VIZUELIZACIJU. Pretvaraš C++ u DOT jezik.
 
 PRAVILA:
 - ISKLJUČIVO C++ (Zabranjen Python).
-- Jezik: Srpski (ekavica).
-- Stil: Stručan, akademski, ali razumljiv srednjoškolcu.
+- Jezik komunikacije: Srpski (ekavica).
 """
 
 st.title(f"🎓 Spec. IT Vežbaonica ({razred})")
@@ -95,7 +93,6 @@ st.title(f"🎓 Spec. IT Vežbaonica ({razred})")
 col_workspace, col_chat = st.columns([1.6, 1])
 
 with col_workspace:
-    # NOVI RASPORED TABOVA
     tab_znanje, tab_vezba, tab_ispit, tab_sim, tab_viz = st.tabs([
         "📖 Baza Znanja (Udžbenik)", 
         "📝 Pojedinačni Zadaci", 
@@ -104,7 +101,7 @@ with col_workspace:
         "📊 Dijagrami"
     ])
     
-    # === TAB 1: BAZA ZNANJA (GENERATOR LEKCIJA) ===
+    # === TAB 1: BAZA ZNANJA ===
     with tab_znanje:
         st.markdown(f"### 📘 Lekcija: {tema}")
         st.caption("Ovde AI generiše kompletnu lekciju sa primerima, kao iz knjige.")
@@ -113,21 +110,19 @@ with col_workspace:
         with col_les1:
             specific_topic = st.text_input("Šta te konkretno zanima?", placeholder="npr. Ugnježdeni IF, Break naredba...")
         with col_les2:
-            st.write("") # Spacer
+            st.write("") 
             st.write("") 
             if st.button("Generiši lekciju", type="primary"):
                 if api_key:
                     client = Groq(api_key=api_key)
                     topic_full = f"{tema} - {specific_topic}" if specific_topic else tema
-                    
-                    # Prompt za generisanje lekcije
                     lesson_p = f"""
                     Napiši DETALJNU lekciju za srednjoškolce o temi: '{topic_full}'.
                     Struktura lekcije:
                     1. Definicija (Šta je to i čemu služi).
                     2. Sintaksa u C++ (Opšta formula).
                     3. Rešen Primer (Kod + Objašnjenje).
-                    4. "Pazi se!" (Najčešće greške učenika, npr. = vs ==).
+                    4. "Pazi se!" (Najčešće greške učenika).
                     5. Mali trik (Best practice).
                     Koristi Markdown formatiranje.
                     """
@@ -138,11 +133,10 @@ with col_workspace:
         if st.session_state.lesson_content:
             st.markdown(f'<div class="lesson-box">{st.session_state.lesson_content}</div>', unsafe_allow_html=True)
 
-    # === TAB 2: POJEDINAČNI ZADACI ===
+    # === TAB 2: ZADACI ===
     with tab_vezba:
         st.markdown("#### Vežbaonica")
         col_btn1, col_btn2 = st.columns([1, 1])
-        
         with col_btn1:
             if st.button("🎲 Novi zadatak"):
                 if api_key:
@@ -153,7 +147,6 @@ with col_workspace:
                         resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt},{"role":"user","content":p}])
                         st.session_state.current_task = resp.choices[0].message.content
                     st.rerun()
-        
         with col_btn2:
             if st.button("👀 Prikaži rešenje"):
                 if not st.session_state.current_task: st.warning("Nema zadatka!")
@@ -174,26 +167,24 @@ with col_workspace:
         code_input = st.text_area("Tvoj kod:", height=150)
         if st.button("Proveri kod"):
             if api_key:
-                msg = f"Zadatak: {st.session_state.current_task}\nKod:\n{code_input}\nAnaliziraj."
+                msg = f"Zadatak: {st.session_state.current_task}\nKod:\n{code_input}\nAnaliziraj kod kao profesor."
                 st.session_state.messages.append({"role":"user", "content":msg})
-                # ... poziv API-ja za proveru (skraćeno zbog dužine) ...
+                client = Groq(api_key=api_key)
+                with st.spinner("Analiziram..."):
+                    resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt}] + st.session_state.messages)
+                    st.session_state.messages.append({"role":"assistant", "content":resp.choices[0].message.content})
+                st.rerun()
 
-    # === TAB 3: PROBNI KONTROLNI (NOVO!) ===
+    # === TAB 3: KONTROLNI ===
     with tab_ispit:
         st.markdown("### 📜 Generator Kontrolnih Zadataka")
-        st.caption("Simulacija pravog kontrolnog. Generiše 3 zadatka različite težine.")
-        
         if st.button("Generiši Probni Kontrolni (Grupa A)", type="primary"):
             if api_key:
                 client = Groq(api_key=api_key)
                 exam_p = f"""
                 Sastavi PROBNI KONTROLNI ZADATAK iz oblasti {tema}.
-                Kontrolni mora da ima 3 zadatka:
-                1. Zadatak (Lak - za ocenu 2/3): Osnovna primena.
-                2. Zadatak (Srednji - za ocenu 4): Malo složenija logika.
-                3. Zadatak (Težak - za ocenu 5): Zahteva "kvaku" ili složeniji algoritam.
-                
-                Ispiši samo tekstove zadataka sa primerima ulaza/izlaza. Ne piši rešenja.
+                3 zadatka: Lak, Srednji, Težak.
+                Ispiši samo tekstove zadataka.
                 """
                 with st.spinner("Štampam kontrolni..."):
                     resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt},{"role":"user","content":exam_p}])
@@ -201,44 +192,37 @@ with col_workspace:
         
         if st.session_state.exam_content:
             st.markdown(f'<div class="exam-box">{st.session_state.exam_content}</div>', unsafe_allow_html=True)
-            st.info("Pokušaj da rešiš ove zadatke u svom editoru (CodeBlocks/VS Code) za 45 minuta!")
 
     # === TAB 4: SIMULACIJA ===
     with tab_sim:
-        sim_code = st.text_area("Kod za Trace Table:", height=150)
+        sim_code = st.text_area("Kod za Trace Table:", height=150, placeholder="int a=5; while(a>0)...")
         if st.button("📉 Napravi tabelu"):
             if api_key and sim_code:
                 client = Groq(api_key=api_key)
-                # ... (logika ista kao pre) ...
-                resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt},{"role":"user","content":f"Trace table for:\n{sim_code}"}])
+                resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt},{"role":"user","content":f"Napravi detaljan Trace Table (tabelu praćenja) za ovaj C++ kod:\n{sim_code}"}])
                 st.markdown(resp.choices[0].message.content)
 
-    # === TAB 5: VIZUELIZACIJA ===
+    # === TAB 5: VIZUELIZACIJA (POPRAVLJENO!) ===
     with tab_viz:
-        viz_code = st.text_area("Kod za dijagram:", height=150)
-        if st.button("🎨 Crtaj"):
+        st.info("Zalepi C++ kod da vidiš dijagram toka.")
+        viz_code = st.text_area("Kod za dijagram:", height=150, placeholder="if (a > b) { cout << a; } else { cout << b; }")
+        
+        if st.button("🎨 Crtaj Dijagram"):
             if api_key and viz_code:
                 client = Groq(api_key=api_key)
-                viz_p = f"Graphviz DOT kod za:\n{viz_code}. Samo kod."
-                resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt},{"role":"user","content":viz_p}])
-                match = re.search(r'```dot(.*?)```', resp.choices[0].message.content, re.DOTALL)
-                if match: st.graphviz_chart(match.group(1).strip())
-
-# DESNA KOLONA: CHAT
-with col_chat:
-    st.markdown("### 💬 Mentor")
-    chat_box = st.container(height=550)
-    with chat_box:
-        for msg in st.session_state.messages:
-            role_class = "bot-msg" if msg["role"]=="assistant" else "user-msg"
-            st.markdown(f'<div class="chat-msg {role_class}">{msg["content"]}</div>', unsafe_allow_html=True)
-            
-    st.markdown("---")
-    c_in = st.text_area("Chat:", height=80, label_visibility="collapsed")
-    if st.button("Pošalji"):
-        if api_key and c_in:
-            st.session_state.messages.append({"role":"user", "content":c_in})
-            client = Groq(api_key=api_key)
-            resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt}] + st.session_state.messages)
-            st.session_state.messages.append({"role":"assistant", "content":resp.choices[0].message.content})
-            st.rerun()
+                # --- STROŽI PROMPT ZA VIZUELIZACIJU ---
+                viz_p = f"""
+                Ti si mašina za konverziju koda. Tvoj jedini zadatak je da pretvoriš dati C++ kod u validan Graphviz DOT jezik.
+                PRAVILA:
+                1. Vrati ISKLJUČIVO DOT kod unutar ```dot i ``` blokova.
+                2. NE PIŠI NIKAKAV UVODNI NI ZAVRŠNI TEKST. Nema "Evo dijagrama". Samo kod.
+                
+                C++ Kod:
+                {viz_code}
+                """
+                with st.spinner("Crtam... (Ovo može potrajati par sekundi)"):
+                    try:
+                        resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt},{"role":"user","content":viz_p}])
+                        full_response = resp.choices[0].message.content
+                        
+                        # --- PAMETNIJE HVATANJE KODA ---
