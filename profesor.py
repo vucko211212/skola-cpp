@@ -258,4 +258,54 @@ switch (x) {
             if api_key:
                 client = Groq(api_key=api_key)
                 quiz_prompt = f"Daj mi kratak C++ snippet iz oblasti {tema} sa trik pitanjem 'Šta je ispis?'. Bez rešenja."
-                resp = client.chat.completions.create(model=MODEL
+                resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt},{"role":"user","content":quiz_prompt}])
+                st.session_state.quiz_code = resp.choices[0].message.content
+        
+        if st.session_state.quiz_code:
+            st.code(st.session_state.quiz_code, language="cpp")
+            user_guess = st.text_input("Tvoj odgovor:")
+            if st.button("Proveri odgovor"):
+                if api_key:
+                    client = Groq(api_key=api_key)
+                    chk_prompt = f"Kod:\n{st.session_state.quiz_code}\nUčenik kaže: '{user_guess}'. Da li je tačno?"
+                    with st.spinner("Proveravam..."):
+                        resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt},{"role":"user","content":chk_prompt}])
+                        st.markdown(resp.choices[0].message.content)
+
+    # === TAB 5: VIZUELIZACIJA ===
+    with tab_viz:
+        st.info("Zalepi C++ kod da vidiš dijagram toka.")
+        viz_code = st.text_area("Kod za dijagram:", height=150)
+        if st.button("🎨 Nacrtaj"):
+            if api_key and viz_code:
+                client = Groq(api_key=api_key)
+                viz_p = f"Pretvori ovaj C++ kod u Graphviz DOT format. Vrati SAMO kod u ```dot``` bloku.\n{viz_code}"
+                resp = client.chat.completions.create(model=MODEL_NAZIV, messages=[{"role":"system","content":system_prompt},{"role":"user","content":viz_p}])
+                match = re.search(r'```dot(.*?)```', resp.choices[0].message.content, re.DOTALL)
+                if match: st.graphviz_chart(match.group(1).strip())
+                else: st.error("Greška pri crtanju.")
+
+# DESNA KOLONA: CHAT
+with col_chat:
+    st.markdown("### 💬 Mentor")
+    chat_container = st.container(height=600)
+    with chat_container:
+        for msg in st.session_state.messages:
+            if msg["role"] == "assistant":
+                st.markdown(f'<div class="chat-msg bot-msg"><b>Profesor:</b><br>{msg["content"]}</div>', unsafe_allow_html=True)
+            elif msg["role"] == "user":
+                text = msg["content"]
+                if "Zadatak:" in text: text = "📝 *Predao sam rešenje zadatka...*"
+                st.markdown(f'<div class="chat-msg user-msg">{text}</div>', unsafe_allow_html=True)
+
+    st.markdown("---")
+    chat_input = st.text_area("Piši profesoru ovde:", height=80, placeholder="Pitaj me o gradivu...", label_visibility="collapsed")
+    if st.button("Pošalji poruku"):
+        if api_key and chat_input:
+            st.session_state.messages.append({"role": "user", "content": chat_input})
+            client = Groq(api_key=api_key)
+            with st.spinner("..."):
+                full_msgs = [{"role": "system", "content": system_prompt}] + st.session_state.messages
+                resp = client.chat.completions.create(model=MODEL_NAZIV, messages=full_msgs)
+                st.session_state.messages.append({"role": "assistant", "content": resp.choices[0].message.content})
+            st.rerun()
